@@ -1,15 +1,10 @@
 import java.io.*;
 import java.net.*;
-
-
-
-
-
-
+import java.util.*;
 
 class TCPServer{
-
-	boolean isUserNameValid(String username){
+	public static ClientMap clientData = new ClientMap();
+	public boolean isUserNameValid(String username){
 		for(int i=0;i<username.length();i++){
 			if(username.charAt(i) == ' ' || username.charAt(i) == '/' || username.charAt(i) == ':'){
 				return false;
@@ -18,83 +13,138 @@ class TCPServer{
 		return true;
 	}
 
-
 	public static void main(String argv[]) throws Exception{
-		//Initializing Welcome Socket with a given port
 		ServerSocket welcomeSocket = new ServerSocket(6789);
-		BufferedReader inFromClientArray[5] = new BufferedReader()[5];
-		DataOutputStream outToClientArray[5] = new DataOutputStream()[5];
-		String clientName[5] = new String[5];
-		int numClients = 0;
 		while(true){
-			//Infinite loop until you stop the process
 			Socket connectionSocket = welcomeSocket.accept();
-			BufferedReader inFromClient[numClients] = new BufferedReader(new InputStreamReader(connectionSocket.getInputStream()));
-			DataOutputStream outToClient[numClients] = new DataOutputStream(connectionSocket.getOutputStream());
-			String askUserName = "Tell me your name?";
-			outToClient.writeBytes(askUserName);
-			String userName = inFromClient.readLine();
-			if(isUserNameValid){
-				clientName[numClients] = userName;
-				numClients++;
-			}
-			SocketThread socketThread = new SocketThread(connectionSocket, inFromClient, outToClient, clientName);
+			BufferedReader inFromClient = new BufferedReader(new InputStreamReader(connectionSocket.getInputStream()));
+			DataOutputStream outToClient = new DataOutputStream(connectionSocket.getOutputStream());
+			SocketThread socketThread = new SocketThread(connectionSocket, inFromClient, outToClient);
 			Thread thread = new Thread(socketThread);
 			thread.start();
 		}
 	}
 }
 
-class SocketThread implements Runnable{
-	String[] clientName;
-	String clientSentence;
-	String capitalizedSentence;
+class SocketThread extends TCPServer implements Runnable{
 	Socket connectionSocket;
-	BufferedReader[] inFromClient;
-	DataOutputStream[] outToClient;
+	BufferedReader inFromClient;
+	DataOutputStream outToClient;
+	String username;
 
-	SocketThread(Socket connectionSocket, BufferedReader[] inFromClient, DataOutputStream[] outToClient, String[] clientName){
+	SocketThread(Socket connectionSocket, BufferedReader inFromClient, DataOutputStream outToClient){
 		this.connectionSocket = connectionSocket;
 		this.inFromClient = inFromClient;
 		this.outToClient = outToClient;
-		this.clientName = clientName;
-	}
-
-	int isUserPresent(String[] nameList, String key){
-		for(int i=0;i<nameList.length;i++){
-			if(nameList[i].equals(key)){
-				return i;
-			}
-		}
-		return -1;
 	}
 
 	public void run(){
+		String clientSentence;
+		String capitalizedSentence;
 		String clientMessage = "";
 		String senderName = "";
 		int index;
 		boolean isMessageComplete = false;
-		// String clientName[5];
-		
-		
 		while(true){
 			try{
 				clientSentence = inFromClient.readLine();
-				index = clientSentence.indexOf("USERNAME:");
+				System.out.println(clientSentence);
+				if(clientSentence.equals("")){
+					clientSentence = inFromClient.readLine();
+				}
+				index = clientSentence.indexOf("REGISTER");
 				if(index != -1){
-					senderName = clientSentence.substring(9,clientSentence.length());
+					index = clientSentence.indexOf("TOSEND");
+					if(index != -1){
+						senderName = clientSentence.substring(index+7, clientSentence.length());
+						this.username = senderName;
+						boolean temp = clientData.registrationMap.containsKey(senderName);
+						if(temp){
+							String errString = "ERROR 102 Username already present";
+							outToClient.writeBytes(errString + "\n");
+							continue;
+						}
+						else{
+							clientData.registrationMap.put(senderName, 1);
+							clientData.inServerMap.put(senderName, inFromClient);
+							String confirmationString = "REGISTERED TOSEND " + senderName;
+							outToClient.writeBytes(confirmationString + "\n");
+							continue;
+						}
+					}
+					else{
+						index = clientSentence.indexOf("TORECV");
+						if(index != -1){
+							senderName = clientSentence.substring(index+7, clientSentence.length());
+							boolean temp = clientData.registrationMap.containsKey(senderName);
+							if(temp){
+								if(clientData.registrationMap.get(senderName) == 1){
+									this.username = senderName;
+									clientData.registrationMap.remove(senderName);
+									clientData.dataMap.put(senderName, outToClient);
+									clientData.registrationMap.put(senderName, 2);
+									String confirmationString = "REGISTERED TORECV " + senderName;
+									outToClient.writeBytes(confirmationString + "\n");
+									continue;
+								}	
+							}
+							
+							else{
+								String confirmationString = "FIRST GET TOSEND REGISTERED " + senderName;
+								outToClient.writeBytes(confirmationString + "\n");
+								continue;
+							}
+						}
+					}
 				}
-				index = clientSentence.indexOf("MESSAGE:");
+				
+				System.out.println(senderName + ": " + clientSentence);
+				index = clientSentence.indexOf("SEND");
+				// System.out.println(index);
 				if(index != -1){
-					clientMessage = clientSentence.substring(8,clientSentence.length());
-					isMessageComplete = true;
+					String receiverName = clientSentence.substring(5,clientSentence.length());
+					senderName = this.username;
+					// System.out.println("hi");
+					String contentLengthString = inFromClient.readLine();
+					System.out.println(contentLengthString);
+					int contentLength = Integer.parseInt(contentLengthString.substring(contentLengthString.indexOf(" ") + 1, contentLengthString.length()));
+					System.out.println(contentLength);
+					String a = inFromClient.readLine();
+					String message = inFromClient.readLine() + "\n";
+					System.out.println("Message is " + message);
+					System.out.println("I was here");
+					System.out.println(clientData.registrationMap.containsKey(receiverName));
+					// for (Map.Entry<String, Integer> entry : clientData.registrationMap.entrySet()){
+ 				// 	   System.out.println(entry.getKey()+" : "+entry.getValue());
+					// }
+					// int registrationLevel = clientData.registrationMap.get(receiverName);
+					// System.out.println("hello " + registrationLevel);
+					if(clientData.registrationMap.get(receiverName) == 2){
+						System.out.println("Receiver is present");
+						String sender_info = "FORWARD " + senderName + "\n";
+						DataOutputStream outPort = clientData.dataMap.get(receiverName);
+						System.out.println("my mesage: " + message);
+						System.out.println("I am here");
+						outPort.writeBytes(sender_info + contentLengthString + "\n" + "\n" + message + "\n");
+						String clientResponse = clientData.inServerMap.get(receiverName).readLine() + "\n";
+						if(clientResponse.indexOf("RECEIVED") != -1){
+							String confirmSenderString = "SENT" + receiverName + "\n";
+							outToClient.writeBytes(confirmSenderString + "\n");
+							continue;
+						}
+						else{
+							System.out.println(clientResponse);
+							clientData.dataMap.get(senderName).writeBytes(clientResponse + "\n");
+							continue;
+						}
+					}
+					else{
+						String error_string = "ERROR 102 Unable to send\n";
+						clientData.dataMap.get(senderName).writeBytes(error_string);
+						continue;
+					}
 				}
-				if(isMessageComplete == true){
-					System.out.println(senderName + ": " + clientMessage);
-					capitalizedSentence = clientMessage.toUpperCase() + '\n';
-					outToClient.writeBytes(capitalizedSentence);
-					isMessageComplete = false;
-				}
+					
 			}
 			catch(Exception e){
 				try{
