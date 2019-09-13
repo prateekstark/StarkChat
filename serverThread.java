@@ -47,6 +47,9 @@ class SocketThread extends TCPServer implements Runnable{
 		String clientResponse;
 		boolean isMessageComplete = false;
 		while(true){
+			if(clientData.inServerMap.containsValue(inFromClient)){
+				break;
+			}
 			try{
 				clientSentence = inFromClient.readLine();
 				System.out.println(clientSentence);
@@ -99,7 +102,6 @@ class SocketThread extends TCPServer implements Runnable{
 					}
 				}
 				
-				System.out.println(senderName + ": " + clientSentence);
 				index = clientSentence.indexOf("SEND");
 				if(index != -1){
 					String receiverName = clientSentence.substring(5,clientSentence.length());
@@ -113,26 +115,16 @@ class SocketThread extends TCPServer implements Runnable{
 						DataOutputStream outPort = clientData.dataMap.get(receiverName);
 						BufferedReader inPort = clientData.inServerMap.get(receiverName);
 						outPort.writeBytes(sender_info + contentLengthString + "\n" + "\n" + message + "\n");
-						System.out.println("I am here");
 						clientResponse = inPort.readLine();
-						System.out.println(clientResponse);
-						System.out.println("I am not here");
 						if(clientResponse.equals("")){
 							clientResponse = inPort.readLine();
 						}
-						System.out.println(clientResponse);
-
-						System.out.println("I am not not here");
-
-						System.out.println("client response = " + clientResponse);
 						if(clientResponse.indexOf("RECEIVED") != -1){
-							System.out.println("I reached here");
 							String confirmSenderString = "SENT" + receiverName + "\n";
 							outToClient.writeBytes(confirmSenderString + "\n");
 							continue;
 						}
 						else{
-							System.out.println(clientResponse);
 							outToClient.writeBytes(clientResponse +"\n" + "\n");
 							continue;
 						}
