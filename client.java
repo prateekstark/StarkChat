@@ -2,8 +2,23 @@ import java.io.*;
 import java.net.*;
 import java.util.*;
 
+import java.security.KeyFactory;
+import java.security.KeyPair;
+import java.security.KeyPairGenerator;
+import java.security.NoSuchAlgorithmException;
+import java.security.NoSuchProviderException;
+import java.security.PrivateKey;
+import java.security.PublicKey;
+import java.security.SecureRandom;
+import java.security.spec.PKCS8EncodedKeySpec;
+import java.security.spec.X509EncodedKeySpec;
+import javax.crypto.Cipher;
+
 class TCPClient{
+	public static Cryptography security = new Cryptography();
 	public static BufferedReader inFromUser = new BufferedReader(new InputStreamReader(System.in));
+	public static byte[] clientPublicKey;
+	public static byte[] clientPrivateKey;
 	public static boolean registerToSend(DataOutputStream outToServer, BufferedReader inFromServer, String username) throws Exception{
 		String serverResponse;
 		String registrationRequestToSend = "REGISTER TOSEND" + " " + username + "\n";
@@ -26,10 +41,10 @@ class TCPClient{
 		return false;
 	}
 
-	public static boolean registerToReceive(DataOutputStream outToServer, BufferedReader inFromServer, String username) throws Exception{
+	public static boolean registerToReceive(DataOutputStream outToServer, BufferedReader inFromServer, String username, String publicKey) throws Exception{
 		String serverResponse;
 		String registrationRequestToReceive = "REGISTER TORECV" + " " + username + "\n";
-		outToServer.writeBytes(registrationRequestToReceive + "\n");
+		outToServer.writeBytes(registrationRequestToReceive + publicKey + "\n" + "\n");
 		serverResponse = inFromServer.readLine();
 		if(serverResponse.equals("")){
 			serverResponse = inFromServer.readLine();
@@ -46,6 +61,10 @@ class TCPClient{
 	}
 
 	public static void main(String argv[]) throws Exception{
+		KeyPair generateKeyPair = security.generateKeyPair();
+		clientPrivateKey = generateKeyPair.getPrivate().getEncoded();
+		clientPublicKey = generateKeyPair.getPublic().getEncoded();
+		String base64PublicKey = Base64.getEncoder().encodeToString(clientPublicKey);
 		Socket clientSocket1 = new Socket("localhost", 6789);
 		Socket clientSocket2 = new Socket("localhost", 6789);
 		DataOutputStream outToServer1 = new DataOutputStream(clientSocket1.getOutputStream());
@@ -56,7 +75,7 @@ class TCPClient{
 		String username = inFromUser.readLine();
 		String sentence, modifiedSentence, message;
 		boolean connectionStatus1 = registerToSend(outToServer1, inFromServer1, username);
-		boolean connectionStatus2 = registerToReceive(outToServer2, inFromServer2, username);
+		boolean connectionStatus2 = registerToReceive(outToServer2, inFromServer2, username, base64PublicKey);
 		SocketThreadClient socketThread1 = new SocketThreadClient(clientSocket1, inFromServer1, outToServer1, 1);
 		SocketThreadClient socketThread2 = new SocketThreadClient(clientSocket2, inFromServer2, outToServer2, 2);
 		Thread thread1 = new Thread(socketThread1);
@@ -83,17 +102,40 @@ class SocketThreadClient extends TCPClient implements Runnable{
 
 	public void senderNode() throws Exception{
 		String sentence;
+		String encryptedMessage;
 		String modifiedSentence;
 		while(true){
 			sentence = inFromUser.readLine();
 			if(sentence.charAt(0) == '@'){
-				int tempIndex = sentence.indexOf(' ');
-				String toSend = sentence.substring(1,tempIndex);
-				String message = sentence.substring(tempIndex+1, sentence.length());
-				int messageLength = message.length();
-				String toSendInfo = "SEND " + toSend + "\n";
-				String contentLength = "Content-length: " + Integer.toString(messageLength)  + "\n";
-				outToServer.writeBytes(toSendInfo + contentLength + "\n" + message + "\n\n");
+				if(sentence.length() >= 3){
+					int tempIndex = sentence.indexOf(" ");
+					String toSend = sentence.substring(1,tempIndex);
+					String message = sentence.substring(tempIndex+1, sentence.length());
+					int messageLength = message.length();
+					String fetchKey = "FETCHKEY "+ toSend + "\n";
+					outToServer.writeBytes(fetchKey + "\n");
+					String publicKeyInfo = inFromServer.readLine();
+					if(publicKeyInfo.equals("")){
+						publicKeyInfo = inFromServer.readLine();
+					}
+					if(publicKeyInfo.indexOf("KEY") != -1){
+						String tempKey = publicKeyInfo.substring(4, publicKeyInfo.length());
+						byte[] receiverPublicKey = Base64.getDecoder().decode(tempKey);
+						encryptedMessage = Base64.getEncoder().encodeToString(security.encrypt(receiverPublicKey, message.getBytes()));
+						String toSendInfo = "SEND " + toSend + "\n";
+						String contentLength = "Content-length: " + Integer.toString(messageLength)  + "\n";
+						outToServer.writeBytes(toSendInfo + contentLength + "\n" + encryptedMessage + "\n\n");
+					}
+					else{
+						System.out.println(publicKeyInfo);
+						continue;
+
+					}
+				}
+				else{
+					System.out.println("Wrong input");
+					continue;
+				}
 			}
 			else{
 				System.out.println("Wrong input!");
@@ -107,7 +149,7 @@ class SocketThreadClient extends TCPClient implements Runnable{
 				continue;
 			}
 			else if(modifiedSentence.indexOf("ERROR") != -1){
-				if(modifiedSentence.indexOf("103") != -1){
+				if(modifiedSentence.indexOf("102") != -1){
 					System.out.println("Unable to send");
 
 				}
@@ -124,6 +166,7 @@ class SocketThreadClient extends TCPClient implements Runnable{
 		String sentence;
 		String senderName;
 		int index; 
+		String decryptedMessage;
 		while(true){
 			try{
 				sentence = inFromServer.readLine();
@@ -139,7 +182,8 @@ class SocketThreadClient extends TCPClient implements Runnable{
 					if(message.equals("")){
 						message = inFromServer.readLine();
 					}
-					System.out.println(senderName +": " + message);
+					decryptedMessage = new String(security.decrypt(clientPrivateKey, Base64.getDecoder().decode(message)));
+					System.out.println(senderName +": " + decryptedMessage);
 					String confirmationString = "RECEIVED " + senderName + "\n";
 					outToServer.writeBytes(confirmationString+"\n");
 					continue;

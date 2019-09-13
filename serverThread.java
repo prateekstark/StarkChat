@@ -52,7 +52,6 @@ class SocketThread extends TCPServer implements Runnable{
 			}
 			try{
 				clientSentence = inFromClient.readLine();
-				System.out.println(clientSentence);
 				if(clientSentence.equals("")){
 					clientSentence = inFromClient.readLine();
 				}
@@ -83,10 +82,13 @@ class SocketThread extends TCPServer implements Runnable{
 							if(temp){
 								if(clientData.registrationMap.get(senderName) == 1){
 									this.username = senderName;
+									String publicKey = inFromClient.readLine();
 									clientData.registrationMap.remove(senderName);
 									clientData.inServerMap.put(senderName, inFromClient);
 									clientData.dataMap.put(senderName, outToClient);
+									clientData.publicKeyMap.put(senderName, publicKey);
 									clientData.registrationMap.put(senderName, 2);
+									System.out.println("New member added: " + senderName);
 									String confirmationString = "REGISTERED TORECV " + senderName;
 									outToClient.writeBytes(confirmationString + "\n");
 									continue;
@@ -101,6 +103,21 @@ class SocketThread extends TCPServer implements Runnable{
 						}
 					}
 				}
+
+				index = clientSentence.indexOf("FETCHKEY");
+				if(index != -1){
+					String receiverName = clientSentence.substring(9, clientSentence.length());
+					if(clientData.registrationMap.containsKey(receiverName)){
+						if(clientData.registrationMap.get(receiverName) == 2){
+							String publicKeyInfo = "KEY " + clientData.publicKeyMap.get(receiverName);
+							outToClient.writeBytes(publicKeyInfo + "\n\n");
+							continue;
+						}
+					}
+					String error_string = "ERROR 102 Unable to Send\n";
+					outToClient.writeBytes(error_string);
+					continue;
+				}
 				
 				index = clientSentence.indexOf("SEND");
 				if(index != -1){
@@ -110,31 +127,35 @@ class SocketThread extends TCPServer implements Runnable{
 					int contentLength = Integer.parseInt(contentLengthString.substring(contentLengthString.indexOf(" ") + 1, contentLengthString.length()));
 					String a = inFromClient.readLine();
 					String message = inFromClient.readLine() + "\n";
-					if(clientData.registrationMap.get(receiverName) == 2){
-						String sender_info = "FORWARD " + senderName + "\n";
-						DataOutputStream outPort = clientData.dataMap.get(receiverName);
-						BufferedReader inPort = clientData.inServerMap.get(receiverName);
-						outPort.writeBytes(sender_info + contentLengthString + "\n" + "\n" + message + "\n");
-						clientResponse = inPort.readLine();
-						if(clientResponse.equals("")){
+
+					if(clientData.registrationMap.containsKey(receiverName)){
+						if(clientData.registrationMap.get(receiverName) == 2){
+							String sender_info = "FORWARD " + senderName + "\n";
+							DataOutputStream outPort = clientData.dataMap.get(receiverName);
+							BufferedReader inPort = clientData.inServerMap.get(receiverName);
+							outPort.writeBytes(sender_info + contentLengthString + "\n" + "\n" + message + "\n");
 							clientResponse = inPort.readLine();
-						}
-						if(clientResponse.indexOf("RECEIVED") != -1){
-							String confirmSenderString = "SENT" + receiverName + "\n";
-							outToClient.writeBytes(confirmSenderString + "\n");
-							continue;
-						}
-						else{
-							outToClient.writeBytes(clientResponse +"\n" + "\n");
-							continue;
+							if(clientResponse.equals("")){
+								clientResponse = inPort.readLine();
+							}
+							if(clientResponse.indexOf("RECEIVED") != -1){
+								String confirmSenderString = "SENT" + receiverName + "\n";
+								outToClient.writeBytes(confirmSenderString + "\n");
+								continue;
+							}
+							else{
+								outToClient.writeBytes(clientResponse +"\n" + "\n");
+								continue;
+							}
 						}
 					}
-					else{
-						String error_string = "ERROR 102 Unable to send\n";
-						outToClient.writeBytes(error_string);
-						continue;
-					}
+					
+					String error_string = "ERROR 102 Unable to send\n";
+					outToClient.writeBytes(error_string + "\n");
+					continue;
 				}
+				outToClient.writeBytes("ERROR 105 Unable to Process");
+				continue;
 					
 			}
 			catch(Exception e){
