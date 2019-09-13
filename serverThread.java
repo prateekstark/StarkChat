@@ -31,7 +31,7 @@ class SocketThread extends TCPServer implements Runnable{
 	BufferedReader inFromClient;
 	DataOutputStream outToClient;
 	String username;
-
+	
 	SocketThread(Socket connectionSocket, BufferedReader inFromClient, DataOutputStream outToClient){
 		this.connectionSocket = connectionSocket;
 		this.inFromClient = inFromClient;
@@ -44,6 +44,7 @@ class SocketThread extends TCPServer implements Runnable{
 		String clientMessage = "";
 		String senderName = "";
 		int index;
+		String clientResponse;
 		boolean isMessageComplete = false;
 		while(true){
 			try{
@@ -66,7 +67,6 @@ class SocketThread extends TCPServer implements Runnable{
 						}
 						else{
 							clientData.registrationMap.put(senderName, 1);
-							clientData.inServerMap.put(senderName, inFromClient);
 							String confirmationString = "REGISTERED TOSEND " + senderName;
 							outToClient.writeBytes(confirmationString + "\n");
 							continue;
@@ -81,6 +81,7 @@ class SocketThread extends TCPServer implements Runnable{
 								if(clientData.registrationMap.get(senderName) == 1){
 									this.username = senderName;
 									clientData.registrationMap.remove(senderName);
+									clientData.inServerMap.put(senderName, inFromClient);
 									clientData.dataMap.put(senderName, outToClient);
 									clientData.registrationMap.put(senderName, 2);
 									String confirmationString = "REGISTERED TORECV " + senderName;
@@ -100,47 +101,45 @@ class SocketThread extends TCPServer implements Runnable{
 				
 				System.out.println(senderName + ": " + clientSentence);
 				index = clientSentence.indexOf("SEND");
-				// System.out.println(index);
 				if(index != -1){
 					String receiverName = clientSentence.substring(5,clientSentence.length());
 					senderName = this.username;
-					// System.out.println("hi");
 					String contentLengthString = inFromClient.readLine();
-					System.out.println(contentLengthString);
 					int contentLength = Integer.parseInt(contentLengthString.substring(contentLengthString.indexOf(" ") + 1, contentLengthString.length()));
-					System.out.println(contentLength);
 					String a = inFromClient.readLine();
 					String message = inFromClient.readLine() + "\n";
-					System.out.println("Message is " + message);
-					System.out.println("I was here");
-					System.out.println(clientData.registrationMap.containsKey(receiverName));
-					// for (Map.Entry<String, Integer> entry : clientData.registrationMap.entrySet()){
- 				// 	   System.out.println(entry.getKey()+" : "+entry.getValue());
-					// }
-					// int registrationLevel = clientData.registrationMap.get(receiverName);
-					// System.out.println("hello " + registrationLevel);
 					if(clientData.registrationMap.get(receiverName) == 2){
-						System.out.println("Receiver is present");
 						String sender_info = "FORWARD " + senderName + "\n";
 						DataOutputStream outPort = clientData.dataMap.get(receiverName);
-						System.out.println("my mesage: " + message);
-						System.out.println("I am here");
+						BufferedReader inPort = clientData.inServerMap.get(receiverName);
 						outPort.writeBytes(sender_info + contentLengthString + "\n" + "\n" + message + "\n");
-						String clientResponse = clientData.inServerMap.get(receiverName).readLine() + "\n";
+						System.out.println("I am here");
+						clientResponse = inPort.readLine();
+						System.out.println(clientResponse);
+						System.out.println("I am not here");
+						if(clientResponse.equals("")){
+							clientResponse = inPort.readLine();
+						}
+						System.out.println(clientResponse);
+
+						System.out.println("I am not not here");
+
+						System.out.println("client response = " + clientResponse);
 						if(clientResponse.indexOf("RECEIVED") != -1){
+							System.out.println("I reached here");
 							String confirmSenderString = "SENT" + receiverName + "\n";
 							outToClient.writeBytes(confirmSenderString + "\n");
 							continue;
 						}
 						else{
 							System.out.println(clientResponse);
-							clientData.dataMap.get(senderName).writeBytes(clientResponse + "\n");
+							outToClient.writeBytes(clientResponse +"\n" + "\n");
 							continue;
 						}
 					}
 					else{
 						String error_string = "ERROR 102 Unable to send\n";
-						clientData.dataMap.get(senderName).writeBytes(error_string);
+						outToClient.writeBytes(error_string);
 						continue;
 					}
 				}

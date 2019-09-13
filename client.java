@@ -73,6 +73,7 @@ class SocketThreadClient extends TCPClient implements Runnable{
 	BufferedReader inFromServer;
 	DataOutputStream outToServer;
 	int mode;
+	
 	SocketThreadClient(Socket connectionSocket, BufferedReader inFromServer, DataOutputStream outToServer, int mode){
 		this.connectionSocket = connectionSocket;
 		this.inFromServer = inFromServer;
@@ -84,17 +85,19 @@ class SocketThreadClient extends TCPClient implements Runnable{
 		String sentence;
 		String modifiedSentence;
 		while(true){
+			System.out.println("I reached here again");
 			sentence = inFromUser.readLine();
 			if(sentence.charAt(0) == '@'){
 				int tempIndex = sentence.indexOf(' ');
 				String toSend = sentence.substring(1,tempIndex);
-				// System.out.println(toSend);
-				String message = sentence.substring(tempIndex+1, sentence.length()) + "\n";
+				System.out.println(toSend);
+				String message = sentence.substring(tempIndex+1, sentence.length());
 				System.out.println(message);
 				int messageLength = message.length();
+				System.out.println(messageLength);
 				String toSendInfo = "SEND " + toSend + "\n";
-				String contentLength = "Content-length: " + (messageLength - 1) + "\n";
-				outToServer.writeBytes(toSendInfo + contentLength + "\n" + message + "\n");
+				String contentLength = "Content-length: " + Integer.toString(messageLength)  + "\n";
+				outToServer.writeBytes(toSendInfo + contentLength + "\n" + message + "\n\n");
 			}
 			else{
 				System.out.println("Wrong input!");
@@ -104,7 +107,7 @@ class SocketThreadClient extends TCPClient implements Runnable{
 			if(modifiedSentence.equals("")){
 				modifiedSentence = inFromServer.readLine();
 			}
-			else if(modifiedSentence.indexOf("SENT") != -1){
+			if(modifiedSentence.indexOf("SENT") != -1){
 				continue;
 			}
 			else if(modifiedSentence.indexOf("ERROR") != -1){
@@ -132,23 +135,20 @@ class SocketThreadClient extends TCPClient implements Runnable{
 					sentence = inFromServer.readLine();
 				}
 				index = sentence.indexOf("FORWARD");
-				System.out.println("Hey! I am here");
 				if(index != -1){
 					senderName = sentence.substring(sentence.indexOf(" ") + 1, sentence.length());
 					System.out.println(senderName);
 					String contentLengthString = inFromServer.readLine();
 					System.out.println(contentLengthString);
 					int contentLength = Integer.parseInt(contentLengthString.substring(contentLengthString.indexOf(" ") + 1, contentLengthString.length()));
-					// String a = inFromServer.readLine();
 					String message = inFromServer.readLine();
 					if(message.equals("")){
-						System.out.println("hello maam");
 						message = inFromServer.readLine();
 					}
-					System.out.println("print " + message);
-					System.out.println("@" + senderName + " sent " + message);
 					String confirmationString = "RECEIVED " + senderName + "\n";
-					outToServer.writeBytes(confirmationString + "\n");
+					// System.out.println(confirmationString);
+					outToServer.writeBytes(confirmationString+"\n");
+					continue;
 				}
 			}
 			catch(Exception e){
