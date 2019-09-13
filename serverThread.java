@@ -127,13 +127,36 @@ class SocketThread extends TCPServer implements Runnable{
 					int contentLength = Integer.parseInt(contentLengthString.substring(contentLengthString.indexOf(" ") + 1, contentLengthString.length()));
 					String a = inFromClient.readLine();
 					String message = inFromClient.readLine() + "\n";
-
+					String messageSignature = inFromClient.readLine();
 					if(clientData.registrationMap.containsKey(receiverName)){
 						if(clientData.registrationMap.get(receiverName) == 2){
 							String sender_info = "FORWARD " + senderName + "\n";
 							DataOutputStream outPort = clientData.dataMap.get(receiverName);
 							BufferedReader inPort = clientData.inServerMap.get(receiverName);
-							outPort.writeBytes(sender_info + contentLengthString + "\n" + "\n" + message + "\n");
+							outPort.writeBytes(sender_info + contentLengthString + "\n" + "\n" + message + messageSignature + "\n\n");
+							String askString = inPort.readLine();
+							if(askString.equals("")){
+								askString = inPort.readLine();
+							}
+							if(askString.indexOf("FETCHKEY") != -1){
+								String askedName = askString.substring(9, askString.length());
+								if(clientData.registrationMap.containsKey(askedName)){
+									if(clientData.registrationMap.get(askedName) == 2){
+										String publicKeyInfo = "KEY " + clientData.publicKeyMap.get(askedName);
+										outPort.writeBytes(publicKeyInfo + "\n\n");
+									}
+									else{
+										String error_string = "ERROR 102 Unable to Send\n";
+										outToClient.writeBytes(error_string);
+										continue;
+									}
+								}
+								else{
+									String error_string = "ERROR 102 Unable to Send\n";
+									outToClient.writeBytes(error_string);
+									continue;
+								}
+							}
 							clientResponse = inPort.readLine();
 							if(clientResponse.equals("")){
 								clientResponse = inPort.readLine();
