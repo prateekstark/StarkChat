@@ -118,6 +118,16 @@ class SocketThread extends TCPServer implements Runnable{
 					outToClient.writeBytes(error_string);
 					continue;
 				}
+
+				index = clientSentence.indexOf("UNREGISTER");
+				if(index != -1){
+					String unregUsername = this.username;
+					clientData.registrationMap.remove(unregUsername);
+					clientData.inServerMap.remove(unregUsername);
+					clientData.dataMap.remove(unregUsername);
+					clientData.publicKeyMap.remove(unregUsername);
+					outToClient.writeBytes("DONE\n\n");
+				}
 				
 				index = clientSentence.indexOf("SEND");
 				if(index != -1){

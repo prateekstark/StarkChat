@@ -114,14 +114,41 @@ class SocketThreadClient extends TCPClient implements Runnable{
 		byte[] shaBytes;
 		String messageSignature;
 		while(true){
-			sentence = inFromUser.readLine();
-			while(sentence.equals("")){
+			try{
 				sentence = inFromUser.readLine();
+				while(sentence.equals("")){
+					sentence = inFromUser.readLine();
+				}
+			}
+			catch(Exception e){
+				System.out.println("Wrong Input");
+				continue;
+			}
+			if(sentence.equals("UNREGISTER")){
+				String unregisterString = "UNREGISTER" + "\n";
+				outToServer.writeBytes(unregisterString + "\n");
+				String confirmationString = inFromServer.readLine();
+				if(confirmationString.equals("")){
+					confirmationString = inFromServer.readLine();
+				}
+				if(confirmationString.indexOf("DONE") != -1){
+					System.out.println("You are unregistered!");
+					break;
+				}
+				continue;
 			}
 			if(sentence.charAt(0) == '@'){
 				if(sentence.length() >= 3){
 					int tempIndex = sentence.indexOf(" ");
+					if(tempIndex == -1){
+						System.out.println("Wrong Input!");
+						continue;
+					}
 					String toSend = sentence.substring(1,tempIndex);
+					if(tempIndex == sentence.length()){
+						System.out.println("Wrong Input!");
+						continue;
+					}
 					String message = sentence.substring(tempIndex+1, sentence.length());
 					int messageLength = message.length();
 					
@@ -217,7 +244,7 @@ class SocketThreadClient extends TCPClient implements Runnable{
 						decryptSignature = new String(security.decryptWithPublicKey(senderPublicKey, Base64.getDecoder().decode(messageSignature)));
 						byte[] decryptSignatureByte = security.decryptWithPublicKey(senderPublicKey, Base64.getDecoder().decode(messageSignature));
 						if(Base64.getEncoder().encodeToString(md.digest(Base64.getDecoder().decode(message))).equals(Base64.getEncoder().encodeToString(decryptSignatureByte))){
-							System.out.println(senderName +": " + decryptedMessage);
+							System.out.println("#" + senderName +": " + decryptedMessage);
 							String confirmationString = "RECEIVED " + senderName + "\n";
 							outToServer.writeBytes(confirmationString+"\n");
 							continue;	
