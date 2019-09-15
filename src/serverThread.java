@@ -34,7 +34,7 @@ class SocketThread extends TCPServer implements Runnable{
 	public boolean isUserNameValid(String username){
 		boolean condition;
 		for(int i=0;i<username.length();i++){
-			condition = (username.charAt(i) >= 'a' && username.charAt(i) <= 'z') || (username.charAt(i) >= 'A' && username.charAt(i) <= 'Z') || (username.charAt(i) >= '0' && username,charAt(i) <= '9');
+			condition = (username.charAt(i) >= 'a' && username.charAt(i) <= 'z') || (username.charAt(i) >= 'A' && username.charAt(i) <= 'Z') || (username.charAt(i) >= '0' && username.charAt(i) <= '9');
 			if(!condition){
 				return false;
 			}
@@ -63,7 +63,10 @@ class SocketThread extends TCPServer implements Runnable{
 				if(index != -1){
 					index = clientSentence.indexOf("TOSEND");
 					if(index != -1){
-						senderName = clientSentence.substring(index+7, clientSentence.length());
+						int encryptionMode = Integer.parseInt(String.valueOf(clientSentence.charAt(index+6)));
+						
+						senderName = clientSentence.substring(index+8, clientSentence.length());
+						clientData.encryptionMap.put(senderName, encryptionMode);
 						if(!isUserNameValid(senderName)){
 							String errString = "ERROR 100 Malformed Username";
 							outToClient.writeBytes(errString + "\n");
@@ -97,13 +100,12 @@ class SocketThread extends TCPServer implements Runnable{
 									clientData.dataMap.put(senderName, outToClient);
 									clientData.publicKeyMap.put(senderName, publicKey);
 									clientData.registrationMap.put(senderName, 2);
-									System.out.println("New member added: " + senderName);
+									System.out.println("New member added: " + senderName + "\nEncryption mode: " + Integer.toString(clientData.encryptionMap.get(senderName)));
 									String confirmationString = "REGISTERED TORECV " + senderName;
 									outToClient.writeBytes(confirmationString + "\n");
 									continue;
 								}	
 							}
-							
 							else{
 								String confirmationString = "FIRST GET TOSEND REGISTERED " + senderName;
 								outToClient.writeBytes(confirmationString + "\n");
@@ -132,6 +134,7 @@ class SocketThread extends TCPServer implements Runnable{
 				if(index != -1){
 					String unregUsername = this.username;
 					clientData.registrationMap.remove(unregUsername);
+					clientData.encryptionMap.remove(unregUsername);
 					clientData.inServerMap.remove(unregUsername);
 					clientData.dataMap.remove(unregUsername);
 					clientData.publicKeyMap.remove(unregUsername);
@@ -151,7 +154,7 @@ class SocketThread extends TCPServer implements Runnable{
 					String messageSignature = inFromClient.readLine();
 					if(clientData.registrationMap.containsKey(receiverName)){
 						if(clientData.registrationMap.get(receiverName) == 2){
-							String sender_info = "FORWARD " + senderName + "\n";
+							String sender_info = "FORWARD" + clientData.encryptionMap.get(senderName) + " " + senderName + "\n";
 							DataOutputStream outPort = clientData.dataMap.get(receiverName);
 							BufferedReader inPort = clientData.inServerMap.get(receiverName);
 							outPort.writeBytes(sender_info + contentLengthString + "\n" + "\n" + message + messageSignature + "\n\n");

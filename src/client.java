@@ -20,9 +20,9 @@ class TCPClient{
 	public static byte[] clientPublicKey;
 	public static byte[] clientPrivateKey;
 	public static MessageDigest md;
-	public static boolean registerToSend(DataOutputStream outToServer, BufferedReader inFromServer, String username) throws Exception{
+	public static boolean registerToSend(DataOutputStream outToServer, BufferedReader inFromServer, String username, int encryptionMode) throws Exception{
 		String serverResponse;
-		String registrationRequestToSend = "REGISTER TOSEND" + " " + username + "\n";
+		String registrationRequestToSend = "REGISTER TOSEND" + encryptionMode + " " + username + "\n";
 		outToServer.writeBytes(registrationRequestToSend + "\n");
 		serverResponse = inFromServer.readLine();
 		if(serverResponse.equals("")){
@@ -42,7 +42,7 @@ class TCPClient{
 		return false;
 	}
 
-	public static boolean registerToReceive(DataOutputStream outToServer, BufferedReader inFromServer, String username, String publicKey) throws Exception{
+	public static boolean registerToReceive(DataOutputStream outToServer, BufferedReader inFromServer, String username, String publicKey, int encryptionMode) throws Exception{
 		String serverResponse;
 		String registrationRequestToReceive = "REGISTER TORECV" + " " + username + "\n";
 		outToServer.writeBytes(registrationRequestToReceive + publicKey + "\n" + "\n");
@@ -80,14 +80,25 @@ class TCPClient{
 		BufferedReader inFromServer1 = new BufferedReader(new InputStreamReader(clientSocket1.getInputStream()));
 		DataOutputStream outToServer2 = new DataOutputStream(clientSocket2.getOutputStream());
 		BufferedReader inFromServer2 = new BufferedReader(new InputStreamReader(clientSocket2.getInputStream()));
-		// System.out.println("Enter your username: ");
-		// String username = inFromUser.readLine();
+		int mode, encryptionMode = 3;
+		System.out.println("Select mode: (1-> Unencryped 2->Encrypted 3->WithSignatures)");
+		try{
+			encryptionMode = Integer.parseInt(inFromUser.readLine());
+			if(!(encryptionMode == 1 || encryptionMode == 2 || encryptionMode ==3)){
+				System.out.println("Wrong mode! Exiting....");
+				return;
+			}
+		}
+		catch(Exception e){
+			System.out.println("Wrong mode! Exiting....");
+			return;
+		}
 
 		String sentence, modifiedSentence, message;
-		boolean connectionStatus1 = registerToSend(outToServer1, inFromServer1, username);
-		boolean connectionStatus2 = registerToReceive(outToServer2, inFromServer2, username, base64PublicKey);
-		SocketThreadClient socketThread1 = new SocketThreadClient(clientSocket1, inFromServer1, outToServer1, 1);
-		SocketThreadClient socketThread2 = new SocketThreadClient(clientSocket2, inFromServer2, outToServer2, 2);
+		boolean connectionStatus1 = registerToSend(outToServer1, inFromServer1, username, encryptionMode);
+		boolean connectionStatus2 = registerToReceive(outToServer2, inFromServer2, username, base64PublicKey, encryptionMode);
+		SocketThreadClient socketThread1 = new SocketThreadClient(clientSocket1, inFromServer1, outToServer1, 1, encryptionMode);
+		SocketThreadClient socketThread2 = new SocketThreadClient(clientSocket2, inFromServer2, outToServer2, 2, encryptionMode);
 		if(connectionStatus1 && connectionStatus2){
 			Thread thread1 = new Thread(socketThread1);
 			Thread thread2 = new Thread(socketThread2);
@@ -105,12 +116,14 @@ class SocketThreadClient extends TCPClient implements Runnable{
 	BufferedReader inFromServer;
 	DataOutputStream outToServer;
 	int mode;
+	int encryptionMode;
 	
-	SocketThreadClient(Socket connectionSocket, BufferedReader inFromServer, DataOutputStream outToServer, int mode){
+	SocketThreadClient(Socket connectionSocket, BufferedReader inFromServer, DataOutputStream outToServer, int mode, int encryptionMode){
 		this.connectionSocket = connectionSocket;
 		this.inFromServer = inFromServer;
 		this.outToServer = outToServer;
 		this.mode = mode;
+		this.encryptionMode = encryptionMode;
 	}
 
 	public void senderNode() throws Exception{
@@ -176,7 +189,12 @@ class SocketThreadClient extends TCPClient implements Runnable{
 						messageSignature = Base64.getEncoder().encodeToString(security.encryptWithPrivateKey(clientPrivateKey, md.digest(encryptedMessageByte)));
 						String toSendInfo = "SEND " + toSend + "\n";
 						String contentLength = "Content-length: " + Integer.toString(messageLength)  + "\n";
-						outToServer.writeBytes(toSendInfo + contentLength + "\n" + encryptedMessage + "\n" + messageSignature + "\n\n");
+						if(this.encryptionMode == 2 || this.encryptionMode == 3){
+							outToServer.writeBytes(toSendInfo + contentLength + "\n" + encryptedMessage + "\n" + messageSignature + "\n\n");
+						}
+						else{
+							outToServer.writeBytes(toSendInfo + contentLength + "\n" + message + "\n" + messageSignature + "\n\n");
+						}
 					}
 					else{
 						System.out.println(publicKeyInfo);
@@ -228,6 +246,7 @@ class SocketThreadClient extends TCPClient implements Runnable{
 				}
 				index = sentence.indexOf("FORWARD");
 				if(index != -1){
+					int messageEncryptionMode = Character.getNumericValue(sentence.charAt(7));
 					senderName = sentence.substring(sentence.indexOf(" ") + 1, sentence.length());
 					String contentLengthString = inFromServer.readLine();
 					int contentLength = Integer.parseInt(contentLengthString.substring(contentLengthString.indexOf(" ") + 1, contentLengthString.length()));
@@ -248,15 +267,40 @@ class SocketThreadClient extends TCPClient implements Runnable{
 					String keyString = signatureKey.substring(4, signatureKey.length());
 				
 					if(signatureKey.indexOf("KEY") != -1){
-						byte[] senderPublicKey = Base64.getDecoder().decode(keyString);
-						decryptedMessage = new String(security.decrypt(clientPrivateKey, Base64.getDecoder().decode(message)));
-						decryptSignature = new String(security.decryptWithPublicKey(senderPublicKey, Base64.getDecoder().decode(messageSignature)));
-						byte[] decryptSignatureByte = security.decryptWithPublicKey(senderPublicKey, Base64.getDecoder().decode(messageSignature));
-						if(Base64.getEncoder().encodeToString(md.digest(Base64.getDecoder().decode(message))).equals(Base64.getEncoder().encodeToString(decryptSignatureByte))){
+						if(messageEncryptionMode == 1){
+							System.out.println("#" + senderName +": " + message);
+							String confirmationString = "RECEIVED " + senderName + "\n";
+							outToServer.writeBytes(confirmationString+"\n");
+							continue;
+						}
+						else if(messageEncryptionMode == 2){
+							byte[] senderPublicKey = Base64.getDecoder().decode(keyString);
+							decryptedMessage = new String(security.decrypt(clientPrivateKey, Base64.getDecoder().decode(message)));
+							decryptSignature = new String(security.decryptWithPublicKey(senderPublicKey, Base64.getDecoder().decode(messageSignature)));
+							byte[] decryptSignatureByte = security.decryptWithPublicKey(senderPublicKey, Base64.getDecoder().decode(messageSignature));
+							
 							System.out.println("#" + senderName +": " + decryptedMessage);
 							String confirmationString = "RECEIVED " + senderName + "\n";
 							outToServer.writeBytes(confirmationString+"\n");
-							continue;	
+							continue;
+						}
+						else if(messageEncryptionMode ==3){
+							byte[] senderPublicKey = Base64.getDecoder().decode(keyString);
+							decryptedMessage = new String(security.decrypt(clientPrivateKey, Base64.getDecoder().decode(message)));
+							decryptSignature = new String(security.decryptWithPublicKey(senderPublicKey, Base64.getDecoder().decode(messageSignature)));
+							byte[] decryptSignatureByte = security.decryptWithPublicKey(senderPublicKey, Base64.getDecoder().decode(messageSignature));
+							
+							if(Base64.getEncoder().encodeToString(md.digest(Base64.getDecoder().decode(message))).equals(Base64.getEncoder().encodeToString(decryptSignatureByte))){
+								System.out.println("#" + senderName +": " + decryptedMessage);
+								String confirmationString = "RECEIVED " + senderName + "\n";
+								outToServer.writeBytes(confirmationString+"\n");
+								continue;
+							}
+							else{
+								String errorString = "ERROR 105 Wrong message" + "\n";
+								outToServer.writeBytes(errorString + "\n");
+								continue;		
+							}
 						}
 						String errorString = "ERROR 105 Wrong message" + "\n";
 						outToServer.writeBytes(errorString + "\n");
