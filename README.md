@@ -4,8 +4,6 @@ StarkChat is a chat application that allows a user to do encrypted chat with one
 
 Users can direct messages to other users using an @prefix, and the server needs to forward these messages to the intended recipient. The message itself would be encrypted between any pair of users so that the server cannot read the messages, the server can only infer that communication is happening between the given pair of users.
 
-
-
 ## Installation
 
 
@@ -22,12 +20,17 @@ java TCPClient [username] [SERVER_ADDRESS]    #For running the client
 ```
 
 ## Extensions
-For offline users, we can add a database in the server, which stores the messages sent by users to offline client.
+If the user exits by pressing CTRL+C, we can handle this by reading the exception thrown by the server socket. When this happens, we cn remove all the this user from all hashmaps.
 
-If the user exits by pressing CTRL + C, we can handle this by placing a timer in the serverThreads. This would mean that if the server does not hear from the client for let's say 3 minutes, the server deregisters the client from other hashmaps, stop its thread and store it in the offline map. This way we can also deal with offline users. Later when the client registers again.
+For offline users, we can add a database in the server, which stores the messages sent by users to offline client.
 
 Also, we can make another hashmap in the server, which stores the offline users. In this case, they are registered but offline.
 
+
+If the user exits by pressing CTRL + C, we can also handle this by placing a timer in the serverThreads. This would mean that if the server does not hear from the client for let's say 3 minutes, the server deregisters the client from other hashmaps, stop its thread and store it in the offline map. This way we can also deal with offline users. Later when the client registers again, we can send these to the required recipient from the mailbox.
+
+## Caution
+Do not use send byte array directly, because it might have a '\n' which will be read as endline character on the other end.
 
 ## Usage
 
