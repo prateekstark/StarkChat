@@ -6,8 +6,6 @@ public class ClientMap{
 	HashMap<String, BufferedReader> inServerMap = new HashMap<>();
 	HashMap<String, Integer> registrationMap = new HashMap<>();
 	HashMap<String, String> publicKeyMap = new HashMap<>();
-	// HashMap<String, ServerClientData> = newHashMap<>();
-
 }
 
 

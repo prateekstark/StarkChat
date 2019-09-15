@@ -32,10 +32,8 @@ class SocketThread extends TCPServer implements Runnable{
 	}
 
 	public boolean isUserNameValid(String username){
-		boolean condition;
 		for(int i=0;i<username.length();i++){
-			condition = (username.charAt(i) >= 'a' && username.charAt(i) <= 'z') || (username.charAt(i) >= 'A' && username.charAt(i) <= 'Z') || (username.charAt(i) >= '0' && username,charAt(i) <= '9');
-			if(!condition){
+			if(username.charAt(i) == ' ' || username.charAt(i) == '/' || username.charAt(i) == ':'){
 				return false;
 			}
 		}
